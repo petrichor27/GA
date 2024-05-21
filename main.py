@@ -36,7 +36,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.canvas.draw()
         llayout = QVBoxLayout(self.groupBox_graph)
         llayout.addWidget(self.canvas, 88)
-        methods = ['Выбрать', 'Эволюция по Дарвину', 'Эволюция Гюго де Фриза', 'Искусственная иммунная сеть']
+        methods = ['Выбрать', 'Эволюция Дарвина', 'Эволюция Гюго де Фриза', 'Искусственная иммунная сеть']
         self.comboBox_algorithm.clear()
         self.comboBox_algorithm.addItems(methods)
         # self.comboBox_algorithm.activated.connect(self.comboBox_activated)
@@ -64,29 +64,31 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
     def buttonStart_clicked(self):
         self.plainTextEdit_result.clear()
+        if not nx.has_path(self.nx_graph, 0, self.n - 1):
+            self.plainTextEdit_result.insertPlainText(f"Нет пути из вершины 0 в вершину {self.n - 1}")
+            return
         max_flow_value, max_flow_dict = nx.maximum_flow(self.nx_graph, 0, self.n - 1, capacity='weight')
 
         result_max_flow, result_path = 0, []
         index = self.comboBox_algorithm.currentIndex()
         start_time = time.time()
-        if index == 1:
+        if index == 1 or index == 2:
             method = GADarwin(
                 nx_graph=self.nx_graph,
                 graph_size=self.n,
                 population_size=int(self.textEdit_population_size.toPlainText()),
                 iterations=int(self.textEdit_iterations.toPlainText()),
-                mutation_probability=float(self.textEdit_mutation_probability.toPlainText())
+                mutation_probability=float(self.textEdit_mutation_probability.toPlainText()),
+                do_catastrophe=True if index == 2 else False
             )
             result_max_flow, result_path = method.genetic_algorithm()
 
-        elif index == 2:
-            pass
         elif index == 3:
             pass
 
         work_time = time.time() - start_time
         self.plainTextEdit_result.insertPlainText(
-            f'Точное значение максимального потока: {max_flow_value}\nПуть: {max_flow_dict}\nЗначение максимального потока для канонического ГА: {result_max_flow}\nПуть: {result_path}\nВремя работы алгоритма: {round(work_time, 3)}мс'
+            f'Точное значение максимального потока: {max_flow_value}\nЗначение максимального потока для ГА: {result_max_flow}\nПуть: {result_path}\nВремя работы алгоритма: {round(work_time, 3)}мс'
         )
 
     def buttonGraph_clicked(self):

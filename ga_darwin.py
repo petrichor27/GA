@@ -4,12 +4,19 @@ import networkx as nx
 
 class GADarwin:
     # Генерация начальной популяции, все в истоке стоят
-    def __init__(self, nx_graph, graph_size: int, population_size: int, iterations: int, mutation_probability: float):
+    def __init__(
+            self, nx_graph, graph_size: int,
+            population_size: int, iterations: int,
+            mutation_probability: float,
+            do_catastrophe: bool = False
+    ):
+        self.do_catastrophe = do_catastrophe
         self.graph_size = graph_size
         self.graph = nx_graph
         self.population_size = population_size
         self.iterations = iterations
         self.mutation_probability = mutation_probability
+        self.catastrophe_probability = 0.1
         self.source = 0  # вершина исток
         self.sink = self.graph_size - 1  # вершина сток
 
@@ -45,15 +52,15 @@ class GADarwin:
                 if cumulative_probability > rand:
                     return population[i]
 
-    # def catastrophe(self, population: list[list[int]]):
-    #     dead = random.randint(int(len(population) * 0.1), len(population))
-    #     return population[:-dead]
+    def catastrophe(self, population: list[list[int]]):
+        dead = random.randint(int(len(population) * 0.1), int(len(population) * 0.6))
+        return population[:-dead]
 
     # Скрещивание (пути объединяются в какой-то точке)
     def crossover(self, parent1: list[int], parent2: list[int]) -> list[list[int]]:
         common = set(parent1[1:-2]) & set(parent2[1:-2])
         if not common:
-            return random.choice([parent1, parent2])
+            return random.choice([[parent1, parent2]])
 
         count_of_children = random.randint(1, 3)
         children = []
@@ -82,7 +89,6 @@ class GADarwin:
     # Оператор мутации (одна вершина меняется и путь дальше перестраивается)
     def mutation(self, individual: list[int]):
         temp = individual.copy()
-        print("До мутации: ", individual)
         mutate_index = random.randint(1, len(individual) - 2)
         previous_node = individual[mutate_index - 1]
         individual = individual[:mutate_index]
@@ -95,20 +101,41 @@ class GADarwin:
                 previous_node = individual[-1]
                 mutate_index += 1
             elif all(elem in individual for elem in neighbors):
-                print("Мутация невозможна")
                 individual = temp
                 break
-        print("После мутации: ", individual)
-        print("---------------")
         return individual
 
-    def genetic_algorithm(self) -> tuple[int, list[int]]:
+    def count_final_flow(self, population: list) -> tuple[int, list[list[int]]]:
+        edges = {}
+        for v1 in self.graph:
+            for v2 in self.graph[v1]:
+                edges[(v1, v2)] = self.graph[v1][v2]['weight']
+
+        final_flow = 0
+        final_path = []
+        for ind in population:
+            if ind not in final_path:
+                temp_flow = self.fitness(ind)
+                print(f'edge: {ind}, weight: {temp_flow}')
+                for j in range(len(ind) - 1):
+                    free = edges[(ind[j], ind[j + 1])]
+                    temp_flow = min(temp_flow, free)
+                if temp_flow > 0:
+                    final_flow += temp_flow
+                    final_path.append(ind)
+                    for j in range(len(ind) - 1):
+                        edges[(ind[j], ind[j + 1])] -= temp_flow
+        return final_flow, final_path
+
+    def genetic_algorithm(self) -> tuple[int, list[list[int]]]:
         population = self.generate_population()
 
         for _ in range(self.iterations):
+            if self.do_catastrophe and random.uniform(0, 1) < self.catastrophe_probability:
+                population = self.catastrophe(population)
             fitness_values = [self.fitness(individual) for individual in population]
             new_population = []
-            for _ in range(self.population_size):
+            while len(new_population) < self.population_size:
                 parent1 = self.selection(population, fitness_values)
                 parent2 = self.selection(population, fitness_values)
                 children = self.crossover(parent1, parent2)
@@ -116,8 +143,6 @@ class GADarwin:
                     if random.uniform(0, 1) < self.mutation_probability and len(child) > 2:
                         child = self.mutation(child)
                     new_population.append(child)
-            population = sorted(new_population, key=lambda ind: self.fitness(ind), reverse=True)[:self.population_size]
+            population = new_population[:self.population_size]
 
-        best_individual = max(population, key=lambda ind: self.fitness(ind))
-        max_flow = self.fitness(best_individual)
-        return max_flow, best_individual
+        return self.count_final_flow(population)

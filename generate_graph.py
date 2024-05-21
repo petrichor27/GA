@@ -21,5 +21,5 @@ def generate_random_digraph(n: int) -> list[tuple[int, int, int]]:
             graph[i].add(j)
             v = random.randint(1, 10)
             edges.append((i, j, v))
-
+    print(f'generate_random_digraph: {edges}')
     return edges
